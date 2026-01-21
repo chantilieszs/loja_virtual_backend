@@ -17,4 +17,16 @@ namespace ProjetoUsers.DTOs.User
 
         public DateTime CreatedAt { get; set; }
     }
+
+    public class UserResponseWithProductsDto
+    {
+        public int UserID { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+
+        public string Email { get; set; } = string.Empty;
+
+        public string Role { get; set; } = "User";
+        public ICollection<Product.ProductResponseDtos> Products { get; set; }
+    }
 }

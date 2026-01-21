@@ -7,6 +7,8 @@ using ProjetoUsers.Data;
 using ProjetoUsers.DTOs.Product;
 using ProjetoUsers.Models;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace ProjetoUsers.Controllers
@@ -19,9 +21,46 @@ namespace ProjetoUsers.Controllers
         private readonly DatabaseContext _databaseContext;
     
         public ProductsController(DatabaseContext databaseContext)
-          {
-                _databaseContext = databaseContext;
-          }
+        {
+            _databaseContext = databaseContext;
+        }
+
+        [HttpGet("filter")]
+        public async Task<IActionResult> GetProducts(FilterProductDto query)
+        {
+            var productsQuery = _databaseContext.Products.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query.Name))
+            {
+                productsQuery = productsQuery.Where(p => p.ProductName.Contains(query.Name));
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.Category))
+            {
+                productsQuery = productsQuery
+                    .Where(p => p.Category == query.Category);
+            }
+            var validOrderBy = new[] { "price"};
+            if (!validOrderBy.Contains(query.OrderBy?.ToLower()))
+            {
+                return BadRequest("OrderBy inválido");
+            }
+            if (!string.IsNullOrWhiteSpace(query.OrderBy))
+            {
+                var direction = query.Direction?.ToLower() ?? "asc";
+
+                productsQuery = query.OrderBy.ToLower() switch
+                {
+                    "price" => direction == "desc" ? productsQuery.OrderByDescending(p => p.Price) : productsQuery.OrderBy(p => p.Price),
+                    _ => productsQuery
+                };
+            }
+
+            var products = await productsQuery.ToListAsync();
+
+            return Ok(products);
+        }
+
         [AllowAnonymous]
         [HttpGet]     
         public async Task<IActionResult> GetAllProducts()
@@ -53,7 +92,7 @@ namespace ProjetoUsers.Controllers
             };
             return Ok(product);
         }
-        
+
         [AllowAnonymous]
         [HttpPost]
         public async Task<IActionResult> CreateProduct(CreateProductDtos dto)
@@ -61,6 +100,7 @@ namespace ProjetoUsers.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
             var product = new Product
             {
                 ProductName = dto.ProductName,
@@ -70,7 +110,8 @@ namespace ProjetoUsers.Controllers
                 Category = dto.Category,
                 ImageURL = dto.ImageURL,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                UserId = userId
             };
             
             _databaseContext.Products.Add(product);
@@ -92,7 +133,7 @@ namespace ProjetoUsers.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, Product updatedProduct)
+        public async Task<IActionResult> UpdateProduct(int id, UpdateProductDto updatedProduct)
         {
             var product = _databaseContext.Products.FirstOrDefault(p => p.ProductId == id);
 
@@ -101,12 +142,24 @@ namespace ProjetoUsers.Controllers
                 return NotFound();
             }
 
-            product.ProductName = updatedProduct.ProductName;
-            product.Price = updatedProduct.Price;
-            product.Description = updatedProduct.Description;
-            product.StockQuantity = updatedProduct.StockQuantity;
-            product.Category = updatedProduct.Category;
-            product.ImageURL = updatedProduct.ImageURL;
+            if (updatedProduct.ProductName != null)
+                product.ProductName = updatedProduct.ProductName;
+
+            if (updatedProduct.Price.HasValue)
+                product.Price = updatedProduct.Price.Value;
+
+            if (updatedProduct.Description != null)
+                product.Description = updatedProduct.Description;
+
+            if (updatedProduct.StockQuantity.HasValue)
+                product.StockQuantity = updatedProduct.StockQuantity.Value;
+
+            if (updatedProduct.Category != null)
+                product.Category = updatedProduct.Category;
+
+            if (updatedProduct.ImageURL != null)
+                product.ImageURL = updatedProduct.ImageURL;
+
             product.UpdatedAt = DateTime.UtcNow;
 
             await _databaseContext.SaveChangesAsync();

@@ -19,13 +19,13 @@ namespace ProjetoUsers.DTOs.Product
 
         [Required(ErrorMessage = "A descrição do produto é obrigatória")]
         [MaxLength(500)]
-        public string? Description { get; set; }
+        public string Description { get; set; }
 
         [Range(0, int.MaxValue)]
         public int StockQuantity { get; set; }
 
         [MaxLength(50)]
-        public string? Category { get; set; }
+        public string Category { get; set; }
 
         [Url(ErrorMessage = "URL inválida")]
         public string? ImageURL { get; set; }

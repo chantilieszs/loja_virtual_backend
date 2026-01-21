@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ProjetoUsers.Services;
+using System.Security.Claims;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,7 +40,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOrSelf", policy =>
+        policy.RequireAssertion(context =>
+        {
+            var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
+            var isAdmin = context.User.IsInRole("Admin");
+
+            if (userIdClaim == null)
+                return false;
+
+            var routeId = context.Resource as HttpContext;
+            var id = int.Parse(routeId.Request.RouteValues["id"].ToString());
+
+            return isAdmin || int.Parse(userIdClaim.Value) == id;
+        })
+    );
+});
+
 builder.Services.AddScoped<TokenService>();
 
 var app = builder.Build();

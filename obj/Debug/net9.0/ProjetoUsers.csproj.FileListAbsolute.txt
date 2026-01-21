@@ -49,3 +49,4 @@ C:\Users\Lucas\Desktop\projeto_users\ProjetoUsers\bin\Debug\net9.0\Microsoft.Ide
 C:\Users\Lucas\Desktop\projeto_users\ProjetoUsers\bin\Debug\net9.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
 C:\Users\Lucas\Desktop\projeto_users\ProjetoUsers\bin\Debug\net9.0\Microsoft.IdentityModel.Tokens.dll
 C:\Users\Lucas\Desktop\projeto_users\ProjetoUsers\bin\Debug\net9.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\Lucas\Desktop\projeto_users\ProjetoUsers\obj\Debug\net9.0\ProjetoUsers.sourcelink.json

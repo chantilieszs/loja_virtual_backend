@@ -30,5 +30,8 @@ namespace ProjetoUsers.Models
         public DateTime? UpdatedAt { get; set; }
 
         public List<RefreshToken> RefreshTokens { get; set; }
+
+        public ICollection<Product> Products { get; set; }
     }
+
 }

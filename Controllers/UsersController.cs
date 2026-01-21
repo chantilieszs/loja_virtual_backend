@@ -7,9 +7,12 @@ using ProjetoUsers.Data;
 using ProjetoUsers.Models;
 using ProjetoUsers.DTOs.User;
 using ProjetoUsers.DTOs.Login;
+using ProjetoUsers.DTOs.Product;
 using ProjetoUsers.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+
 
 namespace ProjetoUsers.Controllers
 {
@@ -33,7 +36,7 @@ namespace ProjetoUsers.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var user =  _DatabaseContext.User.FirstOrDefault(u => u.Email == dto.Email);
+            var user = await _DatabaseContext.User.FirstOrDefaultAsync(u => u.Email == dto.Email);
 
             if (user == null)
                 return Unauthorized("Usuário não encontrado");
@@ -65,14 +68,22 @@ namespace ProjetoUsers.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllUsers()
         {
-            var users = _DatabaseContext.User.Select(u => new UserResponseDto
-            {
-                UserID = u.UserID,
-                Name = u.Name,
-                Email = u.Email,
-                Role = u.Role,
-                CreatedAt = u.CreatedAt
-            }).ToList();
+            var users = await _DatabaseContext.User
+                .Include(u => u.Products)
+                .Select(u => new UserResponseWithProductsDto
+                {
+                    UserID = u.UserID,
+                    Name = u.Name,
+                    Products = u.Products.Select(p => new ProductResponseDtos
+                    {
+                        ProductId = p.ProductId,
+                        ProductName = p.ProductName,
+                        Price = p.Price,
+                        StockQuantity = p.StockQuantity,
+                        Category = p.Category,
+                        CreatedAt = p.CreatedAt
+                    }).ToList()
+                }).ToListAsync();
 
             return Ok(users);
         }
@@ -80,30 +91,37 @@ namespace ProjetoUsers.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetUserById(int id)
         {
-            var user = _DatabaseContext.User.FirstOrDefault(u => u.UserID == id);
+            var user = await _DatabaseContext.User
+                .Include(u => u.Products)
+                .Where(u => u.UserID == id)
+                .Select(u => new UserResponseWithProductsDto
+                {
+                    UserID = u.UserID,
+                    Name = u.Name,
+                    Products = u.Products.Select(p => new ProductResponseDtos
+                    {
+                        ProductId = p.ProductId,
+                        ProductName = p.ProductName,
+                        Price = p.Price,
+                        StockQuantity = p.StockQuantity,
+                        Category = p.Category,
+                        CreatedAt = p.CreatedAt
+                    }).ToList()
+                }).FirstOrDefaultAsync();
 
             if (user == null)
             {
                 return NotFound();
             }
 
-            var response = new UserResponseDto
-            {
-                UserID = user.UserID,
-                Name = user.Name,
-                Email = user.Email,
-                Role = user.Role,
-                CreatedAt = user.CreatedAt
-            };
-
-            return Ok(response);
+            return Ok(user);
         }
 
         [AllowAnonymous]
-        [HttpPost]
-        public async Task<IActionResult> CreateUser(CreateUserDto dto)
+        [HttpPost("register")]
+        public async Task<IActionResult> RegisterUser(CreateUserDto dto)
         {
-            var emailExists = _DatabaseContext.User.Any(u => u.Email == dto.Email);
+            var emailExists = await _DatabaseContext.User.AnyAsync(u => u.Email == dto.Email);
 
             if (emailExists)
                 return BadRequest("E-mail já cadastrado");
@@ -135,24 +153,38 @@ namespace ProjetoUsers.Controllers
 
             return CreatedAtAction(nameof(GetUserById), new { id = user.UserID }, response);
         }
-
+        
+        [Authorize(Policy = "AdminOrSelf")]
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateUser(int id, [FromBody] Models.User updatedUser)
+        public async Task<IActionResult> UpdateUser(int id, UpdateUserDto updatedUser)
         {
-            var user = _DatabaseContext.User.FirstOrDefault(u => u.UserID == id);
+            var user = await _DatabaseContext.User.FirstOrDefaultAsync(u => u.UserID == id);
 
             if (user == null)
             {
                 return NotFound();
             }
 
-            user.Name = updatedUser.Name;
-            user.Email = updatedUser.Email;
-            user.Address = updatedUser.Address;
-            user.AddressNumber = updatedUser.AddressNumber;
-            user.City = updatedUser.City;
-            user.State = updatedUser.State;
-            user.PasswordHash = updatedUser.PasswordHash;
+            if (updatedUser.Name != null)
+                user.Name = updatedUser.Name;
+
+            if (updatedUser.Email != null)
+                user.Email = updatedUser.Email;
+
+            if (!string.IsNullOrWhiteSpace(updatedUser.Password))
+                user.PasswordHash = PasswordService.HashPassword(updatedUser.Password);
+
+            if (updatedUser.Address != null)
+                user.Address = updatedUser.Address;
+
+            if (updatedUser.AddressNumber != null)
+                user.AddressNumber = updatedUser.AddressNumber;
+
+            if (updatedUser.City != null)
+                user.City = updatedUser.City;
+
+            if (updatedUser.State != null)
+                user.State = updatedUser.State;
 
             await _DatabaseContext.SaveChangesAsync();
 
@@ -163,7 +195,7 @@ namespace ProjetoUsers.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = _DatabaseContext.User.FirstOrDefault(u => u.UserID == id);
+            var user = await _DatabaseContext.User.FirstOrDefaultAsync(u => u.UserID == id);
 
             if (user == null)
             {
@@ -180,9 +212,9 @@ namespace ProjetoUsers.Controllers
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh(string refreshToken)
         {
-            var token = _DatabaseContext.RefreshTokens.Include(r => r.User).FirstOrDefault(r => r.Token == refreshToken);
+            var token = await _DatabaseContext.RefreshTokens.Include(r => r.User).FirstOrDefaultAsync(r => r.Token == refreshToken);
 
-            if (token == null || token.IsRevoked || token.ExpiresAt < DateTime.UtcNow)
+            if (token == null || token.ExpiresAt < DateTime.UtcNow)
                 return Unauthorized("Refresh token inválido");
 
             if (token.IsRevoked)
